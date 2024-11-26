@@ -27,6 +27,8 @@ import type { RegisterMetricsSchema } from './openapi/spec/register-metrics-sche
 import type { LookupTogglesSchema } from './openapi/spec/lookup-toggles-schema';
 import type { RegisterClientSchema } from './openapi/spec/register-client-schema';
 import { createContexMiddleware } from './context-middleware';
+import type { StorageProvider } from 'unleash-client/lib/repository/storage-provider';
+import type { ClientFeaturesResponse } from 'unleash-client';
 
 export default class UnleashProxy {
     private logger: Logger;
@@ -230,7 +232,7 @@ If you don't provide the \`toggles\` property, then this operation functions exa
             }),
             this.readyMiddleware.bind(this),
             this.expServerSideTokenMiddleware.bind(this),
-            this.unleashApi.bind(this),
+            this.unleashApi.bind(this, config.unleashAppName),
         );
 
         router.post(
@@ -451,9 +453,20 @@ If you don't provide the \`toggles\` property, then this operation functions exa
         }
     }
 
-    unleashApi(req: Request, res: Response<string | ApiRequestSchema>): void {
-        const features = this.client.getFeatureToggleDefinitions();
-        res.set('Cache-control', 'public, max-age=2');
-        res.send({ version: 2, features });
+    unleashApi(appName: string, req: Request, res: Response<ClientFeaturesResponse>): void {
+        // Read direct from the backup storage provider
+        const storageProvider: StorageProvider<ClientFeaturesResponse> =
+            // @ts-expect-error
+            this.client.unleash.repository.storageProvider;
+
+        storageProvider.get(appName).then((features) => {
+            if (!features) {
+                res.sendStatus(503);
+                return;
+            }
+
+            res.set('Cache-control', 'public, max-age=2');
+            res.send(features);
+        })
     }
 }
