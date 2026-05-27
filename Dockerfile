@@ -8,6 +8,7 @@ RUN corepack enable
 
 ENV YARN_ENABLE_SCRIPTS=false
 
+COPY .yarnrc.yml .
 RUN yarn install --immutable
 
 RUN yarn build
